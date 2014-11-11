@@ -127,7 +127,7 @@ loop:
 	log.Printf(rgbterm.String(">> requests time distribution", 255, 255, 255))
 	histogram.Fprintf(
 		os.Stdout,
-		histogram.Hist(40, durations),
+		histogram.PowerHist(2, durations),
 		histogram.Linear(40),
 		func(v float64) string { return time.Duration(v).String() },
 	)
