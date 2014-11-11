@@ -5,7 +5,7 @@ concurrency, for some duration. See how it reacts.
 
 # Demo
 
-!(https://raw.githubusercontent.com/aybabtme/monitor/demo.gif)
+![demo-of-command](https://raw.githubusercontent.com/aybabtme/monitor/master/demo.gif)
 
 ## load testing
 
