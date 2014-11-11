@@ -60,7 +60,7 @@ func main() {
 		0,
 	}
 
-	sprk := spark.Spark(jobRate * 2)
+	sprk := spark.Spark(between(30*time.Millisecond, time.Second, jobRate*2))
 	sprk.Units = "rps"
 	sprk.Start()
 loop:
@@ -133,4 +133,14 @@ func doHttpRequests(tgt string, fetchBody bool, jobc <-chan struct{}, outc chan<
 		}
 		outc <- time.Since(start)
 	}
+}
+
+func between(min, max, val time.Duration) time.Duration {
+	if val < min {
+		return min
+	}
+	if val > max {
+		return max
+	}
+	return val
 }
