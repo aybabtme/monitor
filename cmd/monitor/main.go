@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/aybabtme/rgbterm"
 	"github.com/aybabtme/uniplot/barchart"
+	"github.com/aybabtme/uniplot/histogram"
 	"github.com/aybabtme/uniplot/spark"
 	"io"
 	"io/ioutil"
@@ -11,15 +13,10 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 )
-
-func init() {
-	if os.Getenv("GOMAXPROCS") == "" {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-	}
-}
 
 func main() {
 	var (
@@ -40,6 +37,11 @@ func main() {
 		log.Fatal("invalid usage")
 	}
 
+	if os.Getenv("GOMAXPROCS") == "" {
+		log.Printf("GOMAXPROCS not set, setting to %d", runtime.NumCPU())
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
 	var points [][2]int
 
 	jobRate := time.Duration(float64(time.Second) / *maxRPS)
@@ -51,7 +53,11 @@ func main() {
 	outc := make(chan time.Duration, *conc*2)
 	errc := make(chan error, *conc*2)
 
-	http.DefaultClient.Timeout = time.Second * 2
+	tpt := &http.Transport{
+		MaxIdleConnsPerHost: int(*maxRPS * 2),
+	}
+	http.DefaultClient.Timeout = time.Second * 30
+	http.DefaultClient.Transport = tpt
 
 	var wg sync.WaitGroup
 	for i := 0; i < *conc; i++ {
@@ -62,6 +68,7 @@ func main() {
 		}()
 	}
 
+	var durations []float64
 	point := [2]int{
 		int(time.Now().Unix()),
 		0,
@@ -84,7 +91,7 @@ loop:
 				}
 				continue
 			}
-			_ = res
+			durations = append(durations, float64(res.Nanoseconds()))
 			point[1]++
 		case <-jobTicker.C:
 			select {
@@ -103,6 +110,7 @@ loop:
 	close(errc)
 	close(outc)
 
+	log.Printf(rgbterm.String(">> requests per timestamps", 255, 255, 255))
 	barchart.Fprintf(
 		os.Stdout,
 		barchart.BarChartXYs(points),
@@ -115,6 +123,19 @@ loop:
 			return fmt.Sprintf("%d req/s", int(y))
 		},
 	)
+
+	log.Printf(rgbterm.String(">> requests time distribution", 255, 255, 255))
+	histogram.Fprintf(
+		os.Stdout,
+		histogram.Hist(40, durations),
+		histogram.Linear(40),
+		func(v float64) string { return time.Duration(v).String() },
+	)
+	sort.Float64s(durations)
+	log.Printf(">> fastest: " + rgbterm.String(time.Duration(durations[0]).String(), 128, 255, 128))
+	log.Printf(">>  median: " + rgbterm.String(time.Duration(durations[len(durations)/2]).String(), 128, 128, 255))
+	log.Printf(">> slowest: " + rgbterm.String(time.Duration(durations[len(durations)-1]).String(), 255, 128, 128))
+
 }
 
 func doHttpRequests(tgt string, fetchBody bool, jobc <-chan struct{}, outc chan<- time.Duration, errc chan<- error) {
