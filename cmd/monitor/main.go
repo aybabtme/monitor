@@ -10,9 +10,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
+
+func init() {
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+}
 
 func main() {
 	var (
