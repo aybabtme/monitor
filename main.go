@@ -47,7 +47,7 @@ func main() {
 	}
 
 	if err != nil {
-
+		log.Fatalf("bad argument: %v", err)
 	}
 
 	if os.Getenv("GOMAXPROCS") == "" {
