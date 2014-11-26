@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/aybabtme/rgbterm"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
@@ -24,6 +26,7 @@ func main() {
 		maxRPS    = flag.Float64("rps", 10.0, "max requests per seconds")
 		conc      = flag.Int("conc", 1, "concurrent requests")
 		tgt       = flag.String("tgt", "", "target to test, must be a full http://link.com/path")
+		tgts      = flag.String("tgts", "", "targets to test, must be a a file containing full http://link.com/path, \\n separated")
 		fetchBody = flag.Bool("fetch-body", false, "fetch the body of the response")
 	)
 	flag.Parse()
@@ -31,10 +34,20 @@ func main() {
 	log.SetPrefix("monitor: ")
 	log.SetFlags(0)
 
-	if *tgt == "" {
-		log.Print("need a target")
+	var targets []string
+	var err error
+	if *tgts != "" {
+		targets, err = parseTargetFile(*tgts)
+	} else if *tgt != "" {
+		targets = []string{*tgt}
+	} else {
+		log.Print("need a target or a file containing many targets")
 		flag.PrintDefaults()
 		log.Fatal("invalid usage")
+	}
+
+	if err != nil {
+
 	}
 
 	if os.Getenv("GOMAXPROCS") == "" {
@@ -64,7 +77,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			doHttpRequests(*tgt, *fetchBody, jobc, outc, errc)
+			doHttpRequests(targets, *fetchBody, jobc, outc, errc)
 		}()
 	}
 
@@ -138,8 +151,9 @@ loop:
 
 }
 
-func doHttpRequests(tgt string, fetchBody bool, jobc <-chan struct{}, outc chan<- time.Duration, errc chan<- error) {
+func doHttpRequests(tgts []string, fetchBody bool, jobc <-chan struct{}, outc chan<- time.Duration, errc chan<- error) {
 	for _ = range jobc {
+		tgt := tgts[rand.Intn(len(tgts))]
 		start := time.Now()
 		resp, err := http.Get(tgt)
 		if err != nil {
@@ -161,6 +175,22 @@ func doHttpRequests(tgt string, fetchBody bool, jobc <-chan struct{}, outc chan<
 		}
 		outc <- time.Since(start)
 	}
+}
+
+func parseTargetFile(filename string) ([]string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var targets []string
+	scan := bufio.NewScanner(f)
+	scan.Split(bufio.ScanLines)
+	for scan.Scan() {
+		targets = append(targets, scan.Text())
+	}
+	return targets, scan.Err()
 }
 
 func between(min, max, val time.Duration) time.Duration {
